@@ -1,1 +1,2 @@
-test.py为入口文件
+python3 feizhu.py
+python3 xiecheng.py
