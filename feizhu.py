@@ -2,12 +2,12 @@ import sqlite3
 import time
 import requests
 import random
-from XC_spider import get_calendar_detail,get_flight_info
+from XC_spider import get_feizhu_calendar_detail,get_flight_info
 from common.database import LiteDb as ld
 from common.city_code import city,city_value,city_name,name_code,depart_arrival
 
 def create_flight_table():
-    ld().openDb('flight_info.sqlite')
+    ld().openDb('feizhu_info.sqlite')
     drop_city_sql = 'drop table if exists air_info'
     create_city_sql = 'create table if not exists air_info(departcity text,arrivalcity text,date text,price int)'
     ld().createTables(drop_city_sql)
@@ -15,7 +15,7 @@ def create_flight_table():
     ld().closeDb()
 
 def save_flight_info(air_res):
-    ld().openDb('flight_info.sqlite')
+    ld().openDb('feizhu_info.sqlite')
     insert_city_sql = 'insert into air_info(departcity,arrivalcity,date,price) values(?,?,?,?)'
     ld().executeSql(insert_city_sql,air_res)
     ld().closeDb()
@@ -24,10 +24,19 @@ def get_flight(departcity, arrivalcity):
     depart_city_code = name_code(name=departcity)
     arrival_city_code = name_code(name=arrivalcity)
     try:
-        print(f'爬取{departcity}飞往{arrivalcity}的数据')
+        print(f'爬取{departcity}{depart_city_code}飞往{arrivalcity}{arrival_city_code}的数据')
         delay = random.uniform(0.1, 1.5)
-        res = get_calendar_detail(depart_city_code, arrival_city_code)['data']
-        print('爬取完毕')
+        result = get_feizhu_calendar_detail(depart_city_code, arrival_city_code)['data']['ow']
+        res = {}
+
+        for item in result:
+            dep_date = item['depDate']
+            price = item['price']
+
+            if price != 0:
+                res[dep_date] = price
+
+        print(f'爬取完毕-----{res}')
         if res == {}:
             pass
         else:
@@ -40,7 +49,7 @@ def get_flight(departcity, arrivalcity):
         print(f'{departcity}飞往{arrivalcity}爬取失败，失败原因为：{e}')
 
 def querry_low_price():
-    ld().openDb('flight_info.sqlite')
+    ld().openDb('feizhu_info.sqlite')
     query_sql = 'SELECT * FROM air_info WHERE price = (SELECT MIN(price) FROM air_info)'
     air_info = ld().executeSql(query_sql)
     ld().closeDb()

@@ -3,6 +3,7 @@ import json
 import logging
 import random
 import time
+from datetime import datetime
 
 import requests
 from fake_useragent import UserAgent
@@ -10,7 +11,7 @@ from fake_useragent import UserAgent
 # 参考文章：
 #   - 机场列表 - 维基百科
 #     https://zh.wikipedia.org/wiki/%E4%B8%AD%E5%8D%8E%E4%BA%BA%E6%B0%91%E5%85%B1%E5%92%8C%E5%9B%BD%E6%9C%BA%E5%9C%BA%E5%88%97%E8%A1%A8
-#   - 携程国际机票sign破解 https://blog.csdn.net/weixin_38927522/article/details/108214323
+#   - Chrome断点JS寻找淘宝签名sign https://blog.csdn.net/weixin_44818729/article/details/109400391
 
 ua = UserAgent()
 
@@ -23,8 +24,13 @@ def get_cookie_bfa():
 
     bfa_list = ["1", t, random_id, "1", t, t, "1", "1"]
     bfa = "_bfa={}".format(".".join(bfa_list))
-    # e.g. _bfa=1.1639722810158.u3jal2.1.1639722810158.1639722810158.1.1
     return bfa
+
+ 
+def hex_md5(s):
+    m=hashlib.md5()
+    m.update(s.encode('UTF-8'))
+    return m.hexdigest()
 
 # 获取调用携程 API 查询航班接口 Header 中所需的参数 sign
 def get_sign(transaction_id, departure_city_code, arrival_city_code, departure_date):
@@ -120,6 +126,69 @@ def get_calendar_detail(departure_city_code, arrival_city_code, departure_date='
         "arrivalCityCode": arrival_city_code,
         "cabin": cabin
     }
+
+    r = requests.get(url=detail_url, timeout=10, headers=detail_headers, params=json_data).json()
+    return r
+
+
+def get_feizhu_calendar_detail(departure_city_code, arrival_city_code, departure_date='2023-06-01', cabin='Y'):
+    detail_url = 'https://h5api.m.taobao.com/h5/mtop.trip.flight.calendar.cheapest/1.0/'
+    appKey="12574478"
+    
+    # _m_h5_tk="56fb1ff0b9074f2723dc26cab9638488_1701921305574"
+    # _m_h5_tk_enc="0b9a08c2a068c2cfb6ceac45c65b8b70"
+    
+    current_date = datetime.now()
+    formatted_date = current_date.strftime("%Y-%m-%d")
+    print('date:'+formatted_date)
+    
+    data = {"depCityCode":departure_city_code,"arrCityCode":arrival_city_code,"beginDate":formatted_date,"days":90,"bizType":0,"sceneType":0,"tripType":1,"averagePriceSearch":'false',"h5Version":"1.31.1"}
+    
+    json_data = {
+        "appKey": appKey,
+        "data": json.dumps(data),
+    }
+    html = requests.get(url=detail_url, timeout=10, params=json_data)
+    
+    print('html' + str(html.cookies['_m_h5_tk']))
+    
+    _m_h5_tk=html.cookies['_m_h5_tk']
+    _m_h5_tk_enc=html.cookies['_m_h5_tk_enc']
+
+    cookies = "_samesite_flag_=true; cookie2=1bbc3a64010bd3796dea57cc1aa8ecf4; t=d01e26f4fed9e796fcb6fd9451754f9f; _fli_isNotch=0; cna=PK/HHc4v8HQCAXFvA9IDgwud; _fli_titleHeight=0; _fli_screenDix=2; _tb_token_=393e7a7be83eb; _m_h5_tk=" + _m_h5_tk + "; _m_h5_tk_enc=" + _m_h5_tk_enc + "; isg=BGpqxYVj-0ofZHenqkt_PqK1u9YM2-41beSP7fQjFr1RJwrh3Gs-RbBVs1U712bN"
+    # print('cookies:' + cookies)
+    detail_headers = {
+        "origin": "https://market.m.taobao.com",
+        "referer": "https://market.m.taobao.com/",
+        "content-type": "application/x-www-form-urlencoded",
+        "user-agent": ua.chrome,
+        "cookie": cookies,
+        "Warehousecode": '{"clientType":"other","os":"ios","osVersion":"13.2.3","appVersion":"1.29.0","containerVersion":"0.0.0","pageType":"h5","ttid":"201300@travel_h5_3.1.0","spm":"181.7437871","spmUrl":"181.7437871.20000_ECONOMY_RECOMMEND.d0","spmPre":"/tbtrip.181.11925144.10840050.d10"}'
+    }
+    t=str(int(time.time() * 1000))
+
+    json_string_data = json.dumps(data)
+    
+    token=_m_h5_tk.split('_')[0]
+    print('data:' + json_string_data)
+    print('t:' + t)
+    
+    u=token + '&' + t + '&' + appKey + '&' + json_string_data
+
+    sign=hex_md5(u)
+
+    json_data = {
+        "type": "originaljson",
+        "api": "mtop.trip.flight.calendar.cheapest",
+        "v": "1.0",
+        "ttid": "201300@travel_h5_3.1.0",
+        "appKey": appKey,
+        "sign": sign,
+        "data": json_string_data,
+        "t": t
+    }
+    
+    print('sign:' + sign)
 
     r = requests.get(url=detail_url, timeout=10, headers=detail_headers, params=json_data).json()
     return r

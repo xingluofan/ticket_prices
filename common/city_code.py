@@ -20,7 +20,8 @@ import itertools
 #                 ,"YNT":"烟台","YNZ":"盐城","YTY":"扬州","YUS":"玉树","YZY":"张掖","ZAT":"昭通","ZHA":"湛江","ZHY":"中卫","ZQZ":"张家口","ZUH":"珠海","ZYI":"遵义(新舟)","KJI":"喀纳斯"}
 
 
-city = {"CAN":"广州","FUO":"佛山","SZX":"深圳","ZUH":"珠海","CSX":"长沙","HRB":"哈尔滨"}
+# city = {"CAN":"广州","FUO":"佛山","SZX":"深圳","ZUH":"珠海","CSX":"长沙","CTU":"成都","MFM":"澳门","SIA":"西安","HRB":"哈尔滨","DQA":"大庆","YNJ":"延吉"}
+city = {"CAN":"广州","HRB":"哈尔滨"}
 
 
 city_value = list(city.items())
