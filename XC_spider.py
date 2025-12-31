@@ -59,7 +59,9 @@ def get_transaction_id(departure_city_code, arrival_city_code, departure_date, c
     return transaction_id, flight_list_data
 
 # 获取航线具体信息与航班数据
-def get_flight_info(departure_city_code, arrival_city_code, departure_date='2023-06-01', cabin='Y'):
+def get_flight_info(departure_city_code, arrival_city_code, departure_date=None, cabin='Y'):
+    if departure_date is None:
+        departure_date = datetime.now().strftime('%Y-%m-%d')
     # 获取 transactionID 及航线数据
     transaction_id, flight_list_data = get_transaction_id(departure_city_code, arrival_city_code, departure_date, cabin)
     if transaction_id == "" or flight_list_data is None:
@@ -106,7 +108,9 @@ def get_flight_info(departure_city_code, arrival_city_code, departure_date='2023
         result_data = result_json["data"]["flightItineraryList"]
     return True, result_data
 
-def get_calendar_detail(departure_city_code, arrival_city_code, departure_date='2023-06-01', cabin='Y'):
+def get_calendar_detail(departure_city_code, arrival_city_code, departure_date=None, cabin='Y'):
+    if departure_date is None:
+        departure_date = datetime.now().strftime('%Y-%m-%d')
     transaction_id, flight_list_data = get_transaction_id(departure_city_code, arrival_city_code, departure_date, cabin)
     bfa = get_cookie_bfa()
     detail_url = 'https://flights.ctrip.com/international/search/api/lowprice/calendar/getOwCalendarPrices'
@@ -131,64 +135,171 @@ def get_calendar_detail(departure_city_code, arrival_city_code, departure_date='
     return r
 
 
-def get_feizhu_calendar_detail(departure_city_code, arrival_city_code, departure_date='2023-06-01', cabin='Y'):
+def get_feizhu_calendar_detail(departure_city_code, arrival_city_code, departure_date=None, cabin='Y'):
     detail_url = 'https://h5api.m.taobao.com/h5/mtop.trip.flight.calendar.cheapest/1.0/'
-    appKey="12574478"
-    
-    # _m_h5_tk="56fb1ff0b9074f2723dc26cab9638488_1701921305574"
-    # _m_h5_tk_enc="0b9a08c2a068c2cfb6ceac45c65b8b70"
+    appKey = "12574478"
     
     current_date = datetime.now()
     formatted_date = current_date.strftime("%Y-%m-%d")
-    print('date:'+formatted_date)
+    print(f'Fetching Feizhu data: {departure_city_code} -> {arrival_city_code} on {formatted_date}')
     
-    data = {"depCityCode":departure_city_code,"arrCityCode":arrival_city_code,"beginDate":formatted_date,"days":90,"bizType":0,"sceneType":0,"tripType":1,"averagePriceSearch":'false',"h5Version":"1.31.1"}
+    data = {
+        "depCityCode": departure_city_code,
+        "arrCityCode": arrival_city_code,
+        "beginDate": formatted_date,
+        "days": 90,
+        "bizType": 0,
+        "sceneType": 0,
+        "tripType": 1,
+        "averagePriceSearch": 'false',
+        "h5Version": "1.31.1"
+    }
     
-    json_data = {
+    # Use a Session to manage cookies automatically
+    session = requests.Session()
+    
+    # Use a fixed, modern Chrome User-Agent to match the Sec-Ch-Ua headers
+    # Random UA from fake_useragent might mismatch with fixed Client Hints
+    fixed_ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    
+    # Set common headers for all requests - mimicking a real Chrome browser on macOS
+    session.headers.update({
+        "User-Agent": fixed_ua,
+        "Referer": "https://h5.m.taobao.com/",
+        "Origin": "https://h5.m.taobao.com",
+        "Accept": "application/json, text/plain, */*",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site",
+        "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"macOS"'
+    })
+
+    # Step 1: First Request to get the Token (_m_h5_tk)
+    # We send a request with an empty/dummy sign to trigger the token issuance
+    t = str(int(time.time() * 1000))
+    params_1 = {
+        "jsv": "2.4.11",
         "appKey": appKey,
-        "data": json.dumps(data),
-    }
-    html = requests.get(url=detail_url, timeout=10, params=json_data)
-    
-    print('html' + str(html.cookies['_m_h5_tk']))
-    
-    _m_h5_tk=html.cookies['_m_h5_tk']
-    _m_h5_tk_enc=html.cookies['_m_h5_tk_enc']
-
-    cookies = "_samesite_flag_=true; cookie2=1bbc3a64010bd3796dea57cc1aa8ecf4; t=d01e26f4fed9e796fcb6fd9451754f9f; _fli_isNotch=0; cna=PK/HHc4v8HQCAXFvA9IDgwud; _fli_titleHeight=0; _fli_screenDix=2; _tb_token_=393e7a7be83eb; _m_h5_tk=" + _m_h5_tk + "; _m_h5_tk_enc=" + _m_h5_tk_enc + "; isg=BGpqxYVj-0ofZHenqkt_PqK1u9YM2-41beSP7fQjFr1RJwrh3Gs-RbBVs1U712bN"
-    # print('cookies:' + cookies)
-    detail_headers = {
-        "origin": "https://market.m.taobao.com",
-        "referer": "https://market.m.taobao.com/",
-        "content-type": "application/x-www-form-urlencoded",
-        "user-agent": ua.chrome,
-        "cookie": cookies,
-        "Warehousecode": '{"clientType":"other","os":"ios","osVersion":"13.2.3","appVersion":"1.29.0","containerVersion":"0.0.0","pageType":"h5","ttid":"201300@travel_h5_3.1.0","spm":"181.7437871","spmUrl":"181.7437871.20000_ECONOMY_RECOMMEND.d0","spmPre":"/tbtrip.181.11925144.10840050.d10"}'
-    }
-    t=str(int(time.time() * 1000))
-
-    json_string_data = json.dumps(data)
-    
-    token=_m_h5_tk.split('_')[0]
-    print('data:' + json_string_data)
-    print('t:' + t)
-    
-    u=token + '&' + t + '&' + appKey + '&' + json_string_data
-
-    sign=hex_md5(u)
-
-    json_data = {
-        "type": "originaljson",
+        "t": t,
+        "sign": "1234567890", # Invalid sign to force token generation
         "api": "mtop.trip.flight.calendar.cheapest",
         "v": "1.0",
-        "ttid": "201300@travel_h5_3.1.0",
+        "type": "originaljson",
+        "dataType": "json",
+        "data": json.dumps(data)
+    }
+
+    try:
+        # Note: headers are already in session
+        r1 = session.get(url=detail_url, params=params_1, timeout=10)
+    except Exception as e:
+        print(f"Network error during first request: {e}")
+        return {'data': {}}
+
+    # Check if we got the token
+    cookies = session.cookies.get_dict()
+    _m_h5_tk = cookies.get('_m_h5_tk')
+    _m_h5_tk_enc = cookies.get('_m_h5_tk_enc')
+
+    if not _m_h5_tk:
+        print("Failed to get _m_h5_tk cookie in first attempt.")
+        print(f"Status: {r1.status_code}")
+        # print(f"Response: {r1.text[:200]}")
+        return {'data': {}}
+    
+    print(f"Got Token: {_m_h5_tk[:10]}...")
+
+    # Step 2: Calculate Sign with the new Token
+    # Token format is usually "token_timestamp"
+    token = _m_h5_tk.split('_')[0]
+    t = str(int(time.time() * 1000))
+    json_string_data = json.dumps(data)
+    
+    # Sign = md5(token & t & appKey & data)
+    str_to_sign = f"{token}&{t}&{appKey}&{json_string_data}"
+    sign = hex_md5(str_to_sign)
+    
+    # Step 3: Second Request with Valid Sign
+    params_2 = {
+        "jsv": "2.4.11",
         "appKey": appKey,
+        "t": t,
         "sign": sign,
-        "data": json_string_data,
-        "t": t
+        "api": "mtop.trip.flight.calendar.cheapest",
+        "v": "1.0",
+        "type": "originaljson",
+        "dataType": "json",
+        "data": json_string_data
     }
     
-    print('sign:' + sign)
+    try:
+        r2 = session.get(url=detail_url, params=params_2, timeout=10)
+        result = r2.json()
+        
+        # Check if successful
+        if "ret" in result and "SUCCESS" in result["ret"][0]:
+            return result
+        else:
+            print(f"API Error: {result.get('ret', 'Unknown Error')}")
+            return {'data': {}}
+    except Exception as e:
+        print(f"Error during second request: {e}")
+        return {'data': {}}
 
-    r = requests.get(url=detail_url, timeout=10, headers=detail_headers, params=json_data).json()
-    return r
+def get_feizhu_calendar_detail_with_cookie(departure_city_code, arrival_city_code, cookie_header, departure_date=None, cabin='Y'):
+    detail_url = 'https://h5api.m.taobao.com/h5/mtop.trip.flight.calendar.cheapest/1.0/'
+    appKey = "12574478"
+    current_date = datetime.now()
+    formatted_date = current_date.strftime("%Y-%m-%d")
+    data = {
+        "depCityCode": departure_city_code,
+        "arrCityCode": arrival_city_code,
+        "beginDate": formatted_date,
+        "days": 90,
+        "bizType": 0,
+        "sceneType": 0,
+        "tripType": 1,
+        "averagePriceSearch": 'false',
+        "h5Version": "1.31.1"
+    }
+    fixed_ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    headers = {
+        "User-Agent": fixed_ua,
+        "Referer": "https://h5.m.taobao.com/",
+        "Origin": "https://h5.m.taobao.com",
+        "Accept": "application/json, text/plain, */*",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Cookie": cookie_header
+    }
+    t = str(int(time.time() * 1000))
+    json_string_data = json.dumps(data)
+    try:
+        token_pair = [p for p in cookie_header.split(';') if p.strip().startswith('_m_h5_tk=')]
+        if not token_pair:
+            return {'data': {}}
+        token_full = token_pair[0].split('=', 1)[1].strip()
+        token = token_full.split('_')[0]
+    except Exception:
+        return {'data': {}}
+    sign = hex_md5(f"{token}&{t}&{appKey}&{json_string_data}")
+    params = {
+        "jsv": "2.4.11",
+        "appKey": appKey,
+        "t": t,
+        "sign": sign,
+        "api": "mtop.trip.flight.calendar.cheapest",
+        "v": "1.0",
+        "type": "originaljson",
+        "dataType": "json",
+        "data": json_string_data
+    }
+    try:
+        r = requests.get(url=detail_url, params=params, headers=headers, timeout=10)
+        return r.json()
+    except Exception:
+        return {'data': {}}

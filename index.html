@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>机票价格可视化</title>
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Element Plus -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/element-plus/dist/index.css"
+    />
+    <script src="https://unpkg.com/element-plus"></script>
+    <!-- ECharts (Optional for future charts) -->
+    <script src="https://unpkg.com/echarts/dist/echarts.min.js"></script>
+    <style>
+      body {
+        font-family: "Helvetica Neue", Helvetica, "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f5f7fa;
+      }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+      }
+      .header {
+        text-align: center;
+        margin-bottom: 30px;
+      }
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        margin-bottom: 20px;
+        padding: 20px;
+        background: #f0f9eb;
+        border-radius: 4px;
+      }
+      .filter-item {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .filter-label {
+        font-size: 14px;
+        color: #606266;
+        font-weight: bold;
+      }
+      .data-table {
+        margin-top: 20px;
+      }
+      .stats-cards {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+      .stat-card {
+        flex: 1;
+        padding: 15px;
+        background: #ecf5ff;
+        border-radius: 4px;
+        text-align: center;
+      }
+      .stat-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: #409eff;
+      }
+      .stat-label {
+        font-size: 14px;
+        color: #909399;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div class="container">
+        <div class="header">
+          <h1>✈️ 机票价格查询与分析</h1>
+          <div style="display: flex; gap: 10px; justify-content: center">
+            <el-button type="primary" @click="openUpdateDialog('feizhu')"
+              >更新飞猪数据</el-button
+            >
+            <el-button type="warning" @click="openUpdateDialog('xiecheng')"
+              >更新携程数据</el-button
+            >
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-cards">
+          <div class="stat-card">
+            <div class="stat-value">{{ filteredData.length }}</div>
+            <div class="stat-label">航班数量</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">¥{{ minPrice }}</div>
+            <div class="stat-label">最低价格</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">¥{{ avgPrice }}</div>
+            <div class="stat-label">平均价格</div>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters">
+          <div class="filter-item">
+            <span class="filter-label">出发城市</span>
+            <el-select
+              v-model="filters.departcity"
+              placeholder="全部"
+              clearable
+              style="width: 150px"
+            >
+              <el-option
+                v-for="city in uniqueDepartCities"
+                :key="city"
+                :label="city"
+                :value="city"
+              ></el-option>
+            </el-select>
+          </div>
+
+          <div class="filter-item">
+            <span class="filter-label">到达城市</span>
+            <el-select
+              v-model="filters.arrivalcity"
+              placeholder="全部"
+              clearable
+              style="width: 150px"
+            >
+              <el-option
+                v-for="city in uniqueArrivalCities"
+                :key="city"
+                :label="city"
+                :value="city"
+              ></el-option>
+            </el-select>
+          </div>
+
+          <div class="filter-item">
+            <span class="filter-label">日期范围</span>
+            <el-date-picker
+              v-model="filters.dateRange"
+              type="daterange"
+              range-separator="至"
+              start-placeholder="开始日期"
+              end-placeholder="结束日期"
+              value-format="YYYY-MM-DD"
+              style="width: 300px"
+            />
+          </div>
+
+          <div class="filter-item">
+            <span class="filter-label">平台</span>
+            <el-select
+              v-model="filters.platform"
+              placeholder="全部"
+              clearable
+              style="width: 150px"
+            >
+              <el-option
+                v-for="p in uniquePlatforms"
+                :key="p"
+                :label="p"
+                :value="p"
+              ></el-option>
+            </el-select>
+          </div>
+
+          <div
+            class="filter-item"
+            style="
+              flex: 1;
+              align-items: flex-end;
+              justify-content: flex-end;
+              display: flex;
+            "
+          >
+            <el-button type="primary" @click="resetFilters">重置筛选</el-button>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="data-table">
+          <el-table
+            :data="paginatedData"
+            style="width: 100%"
+            stripe
+            border
+            v-loading="loading"
+          >
+            <el-table-column
+              prop="departcity"
+              label="出发城市"
+              sortable
+              width="120"
+            ></el-table-column>
+            <el-table-column
+              prop="arrivalcity"
+              label="到达城市"
+              sortable
+              width="120"
+            ></el-table-column>
+            <el-table-column
+              prop="date"
+              label="日期"
+              sortable
+              width="150"
+            ></el-table-column>
+            <el-table-column prop="price" label="价格 (¥)" sortable width="120">
+              <template #default="scope">
+                <span style="color: #f56c6c; font-weight: bold"
+                  >¥{{ scope.row.price }}</span
+                >
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="platform"
+              label="平台"
+              sortable
+            ></el-table-column>
+          </el-table>
+
+          <div style="margin-top: 20px; display: flex; justify-content: center">
+            <el-pagination
+              background
+              layout="prev, pager, next, sizes, total"
+              :total="filteredData.length"
+              :page-sizes="[10, 20, 50, 100]"
+              v-model:page-size="pageSize"
+              v-model:current-page="currentPage"
+            />
+          </div>
+        </div>
+      </div>
+      <el-dialog
+        v-model="updateDialogVisible"
+        title="选择城市并更新数据"
+        width="760px"
+      >
+        <div style="margin-bottom: 16px">
+          <p>请选择需要爬取的城市（默认全选可能会非常慢）：</p>
+          <el-transfer
+            v-model="selectedCityKeys"
+            :data="allCityOptions"
+            :titles="['可选城市', '已选城市']"
+            filterable
+            filter-placeholder="搜索城市"
+          ></el-transfer>
+        </div>
+        <template #footer>
+          <span class="dialog-footer">
+            <el-button @click="updateDialogVisible = false">取消</el-button>
+            <el-button
+              type="primary"
+              @click="startUpdate"
+              :loading="refreshing"
+            >
+              开始更新 ({{ updateType === 'feizhu' ? '飞猪' : '携程' }})
+            </el-button>
+          </span>
+        </template>
+      </el-dialog>
+
+      <el-drawer
+        v-model="logDrawerVisible"
+        title="更新进度日志"
+        direction="rtl"
+        size="50%"
+      >
+        <div
+          style="
+            background: #1e1e1e;
+            color: #fff;
+            padding: 15px;
+            height: 100%;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+          "
+          ref="logContainer"
+        >
+          <div v-for="(log, index) in logs" :key="index">{{ log }}</div>
+        </div>
+      </el-drawer>
+    </div>
+
+    <script>
+      const { createApp, ref, computed, onMounted, nextTick } = Vue
+
+      const app = createApp({
+        setup() {
+          const rawData = ref([])
+          const loading = ref(true)
+          const refreshing = ref(false)
+          const updateDialogVisible = ref(false)
+          const updateType = ref("") // feizhu | xiecheng
+          const allCityOptions = ref([])
+          const selectedCityKeys = ref([])
+          const cookieText = ref("")
+          const logDrawerVisible = ref(false)
+          const logs = ref([])
+          const logContainer = ref(null)
+          const filters = ref({
+            departcity: "",
+            arrivalcity: "",
+            dateRange: [],
+            platform: "",
+          })
+          const pageSize = ref(20)
+          const currentPage = ref(1)
+
+          // Fetch data
+          const fetchData = async () => {
+            loading.value = true
+            try {
+              const response = await fetch("/api/data")
+              const data = await response.json()
+              if (data.error) {
+                ElementPlus.ElMessage.error(
+                  "Error fetching data: " + data.error
+                )
+              } else {
+                rawData.value = data
+              }
+            } catch (error) {
+              ElementPlus.ElMessage.error("Network error")
+              console.error(error)
+            } finally {
+              loading.value = false
+            }
+          }
+
+          const fetchCities = async () => {
+            try {
+              const response = await fetch("/api/cities")
+              const data = await response.json()
+              allCityOptions.value = Object.entries(data).map(
+                ([key, name]) => ({
+                  key,
+                  label: `${name} (${key})`,
+                  disabled: false,
+                })
+              )
+              const defaults = [
+                "CAN",
+                "FUO",
+                "ZUH",
+                "CSX",
+                "CTU",
+                "NDG",
+                "SHE",
+                "HRB",
+                "DQA",
+                "CGQ",
+              ]
+              selectedCityKeys.value = defaults.filter((k) => data[k])
+            } catch (e) {
+              console.error(e)
+            }
+          }
+
+          const openUpdateDialog = (type) => {
+            updateType.value = type
+            updateDialogVisible.value = true
+          }
+
+          const startUpdate = async () => {
+            if (selectedCityKeys.value.length === 0) {
+              ElementPlus.ElMessage.warning("请至少选择一个城市")
+              return
+            }
+            const selectedCities = {}
+            allCityOptions.value.forEach((opt) => {
+              if (selectedCityKeys.value.includes(opt.key)) {
+                selectedCities[opt.key] = opt.label.split(" (")[0]
+              }
+            })
+            updateDialogVisible.value = false
+            logDrawerVisible.value = true
+            logs.value = ["开始更新..."]
+            refreshing.value = true
+            try {
+              const response = await fetch("/api/run_script", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  type: updateType.value,
+                  cities: selectedCities,
+                  // cookie: cookieText.value, // Removed
+                }),
+              })
+              const reader = response.body.getReader()
+              const decoder = new TextDecoder()
+              while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+                const chunk = decoder.decode(value)
+                const lines = chunk.split("\n\n")
+                for (const line of lines) {
+                  if (line.startsWith("data: ")) {
+                    const content = line.substring(6)
+                    if (content === "[DONE]") {
+                      logs.value.push("更新完成！")
+                      ElementPlus.ElMessage.success("数据更新成功！")
+                      await fetchData()
+                    } else if (content.startsWith("[ERROR]")) {
+                      logs.value.push(content)
+                      ElementPlus.ElMessage.error("更新出错")
+                    } else {
+                      logs.value.push(content)
+                    }
+                    if (logContainer.value) {
+                      logContainer.value.scrollTop =
+                        logContainer.value.scrollHeight
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              logs.value.push("网络错误: " + error.message)
+            } finally {
+              refreshing.value = false
+            }
+          }
+
+          onMounted(() => {
+            fetchData()
+            fetchCities()
+          })
+
+          // Computed: Unique values for filters
+          const uniqueDepartCities = computed(() =>
+            [...new Set(rawData.value.map((item) => item.departcity))].sort()
+          )
+          const uniqueArrivalCities = computed(() =>
+            [...new Set(rawData.value.map((item) => item.arrivalcity))].sort()
+          )
+          const uniquePlatforms = computed(() =>
+            [...new Set(rawData.value.map((item) => item.platform))].sort()
+          )
+
+          // Computed: Filtered Data
+          const filteredData = computed(() => {
+            return rawData.value.filter((item) => {
+              const matchDepart =
+                !filters.value.departcity ||
+                item.departcity === filters.value.departcity
+              const matchArrival =
+                !filters.value.arrivalcity ||
+                item.arrivalcity === filters.value.arrivalcity
+              const matchPlatform =
+                !filters.value.platform ||
+                item.platform === filters.value.platform
+
+              let matchDate = true
+              if (
+                filters.value.dateRange &&
+                filters.value.dateRange.length === 2
+              ) {
+                const date = item.date
+                const start = filters.value.dateRange[0]
+                const end = filters.value.dateRange[1]
+                matchDate = date >= start && date <= end
+              }
+
+              return matchDepart && matchArrival && matchPlatform && matchDate
+            })
+          })
+
+          // Computed: Pagination
+          const paginatedData = computed(() => {
+            const start = (currentPage.value - 1) * pageSize.value
+            const end = start + pageSize.value
+            return filteredData.value.slice(start, end)
+          })
+
+          // Computed: Stats
+          const minPrice = computed(() => {
+            if (filteredData.value.length === 0) return 0
+            return Math.min(...filteredData.value.map((d) => d.price))
+          })
+
+          const avgPrice = computed(() => {
+            if (filteredData.value.length === 0) return 0
+            const total = filteredData.value.reduce(
+              (sum, d) => sum + d.price,
+              0
+            )
+            return Math.floor(total / filteredData.value.length)
+          })
+
+          const resetFilters = () => {
+            filters.value = {
+              departcity: "",
+              arrivalcity: "",
+              dateRange: [],
+              platform: "",
+            }
+          }
+
+          return {
+            rawData,
+            loading,
+            filters,
+            uniqueDepartCities,
+            uniqueArrivalCities,
+            uniquePlatforms,
+            filteredData,
+            paginatedData,
+            pageSize,
+            currentPage,
+            minPrice,
+            avgPrice,
+            resetFilters,
+            refreshing,
+            openUpdateDialog,
+            startUpdate,
+            updateDialogVisible,
+            updateType,
+            allCityOptions,
+            selectedCityKeys,
+            cookieText,
+            logDrawerVisible,
+            logs,
+            logContainer,
+          }
+        },
+      })
+
+      app.use(ElementPlus)
+      app.mount("#app")
+    </script>
+  </body>
+</html>

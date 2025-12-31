@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+*.sqlite
+.DS_Store
+.idea/
+.vscode/
+test_drission.py
+logs/
